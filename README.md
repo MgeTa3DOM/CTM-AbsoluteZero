@@ -1,48 +1,46 @@
 # CTM-AbsoluteZero
 
-Framework auto-didactique combinant CTM et Absolute Zero Reasoner avec simulation quantique legere.
+**LIVING CODE** — Self-introspecting, self-modifying, cooperative AI agents.
 
-## AI-OS 2026 : Synthese des Conversations
+## Stack
 
-Architecture complete d'un OS IA en 5 couches, concue en 3h44 de conversations iteratives.
+| Layer | Tool | What |
+|-------|------|------|
+| **Fibra** | Rust | Golden-angle task scheduler, zero-deadlock, Fibonacci cache |
+| **Clarity** | Rust | Decision types with mandatory `.explain()`, WORM audit log |
+| **Living Code** | Python (uv) | Soul, Skill, Network, Growth — self-modifying agents |
+| **API** | Bun (TypeScript) | HTTP server exposing Fibra + Clarity + agent collective |
 
-### Architecture
+## Quick start
+
+```sh
+# Run all tests (Rust + Python + Bun)
+cargo test && cd python && uv run python -m pytest tests/ -v && cd ../packages/api && bun test
+
+# Run the demo
+cd python && uv run living-demo
+
+# Start the API
+cd packages/api && bun run src/server.ts
+```
+
+## What it does
+
+3 agents start with a naive text classifier (57% accuracy).
+One agent evolves its skill autonomously → 100% accuracy.
+Every decision is traced (soul), versioned (skill), shared (network), and measured (growth).
 
 ```
-Layer 5: Collective Intelligence (Swarms, World Models, EvoLLM)
-Layer 4: Fibra Runtime (Golden angle scheduling, zero-lock)
-Layer 3: AIML Orchestration (Declarative agent pipelines)
-Layer 2: Clarity Language (Transparent, explain-required)
-Layer 1: NKV Kernel (Linux minimal, WORM audit, LSM)
+[2] Baseline: alice=57%, bob=57%, carol=57%
+[3] Alice evolved: score=100% (+75% improvement)
+[4] 'Not bad at all' → alice=positive, bob=negative, carol=negative
 ```
 
-### Artefacts
+## Structure
 
-| Document | Description |
-|----------|-------------|
-| [Synthese Complete](SYNTHESE_COMPLETE.md) | Vue d'ensemble des 3h44 de travail |
-| [Specs Finales](specs/SPECIFICATIONS_SYSTEM_FINAL.md) | Architecture 5 couches detaillee |
-| [AIML Spec](specs/AIML_specification.md) | Langage d'orchestration IA |
-| [Manifeste](specs/MANIFESTE_TECHNIQUE_2026.md) | Principes et validation |
-| [Plan d'Action](specs/PLAN_ACTION_CONSTRUCTION.md) | 8 mois, 5 phases |
-| [LUX Language](specs/LUX_transparent_ai_language.md) | Langage IA lisible |
-| [Clarity Design](specs/CLARITY_DESIGN.md) | Langage IA controlable |
-| [Fork/Merge Script](scripts/fork_refine_merge.sh) | Script de construction |
-
-### Garanties de Securite
-
-1. `.explain()` obligatoire (compilateur refuse sinon)
-2. Audit WORM immutable (meme l'IA ne peut pas effacer)
-3. Capabilities kernel-enforced (LSM)
-4. Fibonacci-bounded timeouts (preemption garantie)
-5. Human-in-the-loop pour decisions critiques
-6. Vault isolation pour secrets
-7. cgroup limits pour ressources
-
-### Metriques Cibles
-
-- Boot: < 2 secondes
-- Image: < 50 MB
-- Collective IQ: 1.5x individuel
-- Zero deadlocks (Fibra golden angle)
-- Deploiement: 8 mois
+```
+crates/fibra/        Rust — golden-angle scheduler
+crates/clarity/      Rust — transparent decision types
+python/src/living/   Python — soul, skill, network, growth, demo
+packages/api/src/    Bun — TypeScript API + tests
+```
