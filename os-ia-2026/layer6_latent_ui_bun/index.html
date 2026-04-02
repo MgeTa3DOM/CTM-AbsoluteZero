@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-OS 2026: Latent Space Vision Loop</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050505;
+            color: #0f0;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            display: flex;
+            height: 100vh;
+        }
+        #sidebar {
+            width: 300px;
+            background: rgba(0, 20, 0, 0.9);
+            border-right: 1px solid #0f0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+        #main-view {
+            flex-grow: 1;
+            position: relative;
+        }
+        h1 {
+            font-size: 1.2rem;
+            text-align: center;
+            border-bottom: 1px solid #0f0;
+            padding-bottom: 10px;
+            text-shadow: 0 0 5px #0f0;
+        }
+        .log-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .log-entry {
+            border-left: 2px solid #0f0;
+            padding-left: 5px;
+        }
+        .log-entry.alert {
+            color: #f00;
+            border-left-color: #f00;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            pointer-events: none;
+        }
+        .metric {
+            background: rgba(0,0,0,0.7);
+            padding: 5px;
+            border: 1px solid #0f0;
+            margin-bottom: 5px;
+        }
+        /* Grid overlay for 6D sensor feel */
+        #grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(0, 255, 0, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 0, 0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h1>FFMPEG FIRECRACKER LIVE</h1>
+        <div class="log-container" id="stream-logs">
+            <!-- Logs injected via SSE -->
+            <div class="log-entry">Booting AI-OS 2026 Agentic tracking...</div>
+        </div>
+    </div>
+
+    <div id="main-view">
+        <canvas id="latentCanvas"></canvas>
+        <div id="grid-overlay"></div>
+        <div class="overlay">
+            <div class="metric" id="metric-x">Dim-1 (Context): 0.000</div>
+            <div class="metric" id="metric-y">Dim-2 (Attention): 0.000</div>
+            <div class="metric" id="metric-z">Dim-3 (Entropy): 0.000</div>
+            <div class="metric" id="metric-w">Dim-4 (Golden Angle): 137.5</div>
+            <div class="metric" id="metric-v">Dim-5 (Emergence IQ): 1.5x</div>
+            <div class="metric" id="metric-u">Dim-6 (WORM Integrity): OK</div>
+        </div>
+    </div>
+
+    <script>
+        // Canvas setup for Latent Space Visualization
+        const canvas = document.getElementById('latentCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+
+        function resize() {
+            width = canvas.width = canvas.clientWidth;
+            height = canvas.height = canvas.clientHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Particles representing tokens in latent space
+        const particles = [];
+        for(let i=0; i<150; i++) {
+            particles.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
+                energy: Math.random()
+            });
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; // Trailing effect
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.lineWidth = 1;
+
+            for(let i=0; i<particles.length; i++) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // Bounce
+                if(p.x < 0 || p.x > width) p.vx *= -1;
+                if(p.y < 0 || p.y > height) p.vy *= -1;
+
+                // Draw point
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.energy * 3, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(0, 255, 0, ${p.energy})`;
+                ctx.fill();
+
+                // Draw connections
+                for(let j=i+1; j<particles.length; j++) {
+                    let p2 = particles[j];
+                    let dx = p.x - p2.x;
+                    let dy = p.y - p2.y;
+                    let dist = dx*dx + dy*dy;
+                    if(dist < 10000) {
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.strokeStyle = `rgba(0, 255, 0, ${1 - dist/10000})`;
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(draw);
+        }
+        draw();
+
+        // SSE Connection to Bun Server
+        const logsDiv = document.getElementById('stream-logs');
+
+        const evtSource = new EventSource("/stream");
+        evtSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            // Update 6D Metrics visually
+            document.getElementById('metric-x').innerText = `Dim-1 (Context): ${data.metrics.context.toFixed(3)}`;
+            document.getElementById('metric-y').innerText = `Dim-2 (Attention): ${data.metrics.attention.toFixed(3)}`;
+            document.getElementById('metric-z').innerText = `Dim-3 (Entropy): ${data.metrics.entropy.toFixed(3)}`;
+
+            // Pulse particles based on entropy
+            particles.forEach(p => p.energy = Math.random() * data.metrics.entropy + 0.1);
+
+            // Add Log
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${data.alert ? 'alert' : ''}`;
+            logEntry.innerText = `[${new Date().toISOString().split('T')[1].slice(0, -1)}] ${data.log}`;
+            logsDiv.prepend(logEntry); // Add to top
+
+            // Keep max 50 logs
+            if (logsDiv.children.length > 50) {
+                logsDiv.removeChild(logsDiv.lastChild);
+            }
+        };
+    </script>
+</body>
+</html>
