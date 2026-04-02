@@ -1,0 +1,6 @@
+[package]
+name = "fibra"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
