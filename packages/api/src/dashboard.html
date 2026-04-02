@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LIVING CODE — Latent Space Stream</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; color: #c0c0c0; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; overflow: hidden; height: 100vh; }
+
+  .grid { display: grid; grid-template-columns: 1fr 320px; grid-template-rows: 48px 1fr 200px; height: 100vh; gap: 1px; background: #1a1a2e; }
+
+  /* Header */
+  .header { grid-column: 1 / -1; background: #0d0d1a; display: flex; align-items: center; padding: 0 16px; gap: 16px; border-bottom: 1px solid #1a1a2e; }
+  .header h1 { font-size: 14px; color: #00ff88; font-weight: 600; letter-spacing: 1px; }
+  .header .status { font-size: 11px; color: #666; }
+  .header .status.live { color: #00ff88; }
+  .header .metric { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .header .metric .val { font-size: 16px; color: #fff; font-weight: 700; }
+  .header .metric .lbl { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+  .spacer { flex: 1; }
+
+  /* Main canvas */
+  .canvas-wrap { background: #0a0a12; position: relative; overflow: hidden; }
+  canvas { width: 100%; height: 100%; display: block; }
+
+  /* Side panel */
+  .side { background: #0d0d1a; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .side h2 { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
+
+  .agent-card { background: #111122; border: 1px solid #1a1a33; border-radius: 4px; padding: 8px; }
+  .agent-card .name { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+  .agent-card .name .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .agent-card .info { font-size: 10px; color: #666; line-height: 1.6; }
+  .agent-card .info .val { color: #aaa; }
+  .agent-card .embedding { display: flex; gap: 1px; margin-top: 4px; height: 12px; }
+  .agent-card .embedding .bar { flex: 1; border-radius: 1px; }
+
+  .state-idle { background: #335533; }
+  .state-executing { background: #3388cc; }
+  .state-thinking { background: #6644cc; }
+  .state-error { background: #cc3333; }
+  .state-evolving { background: #ccaa22; }
+
+  /* Soul log */
+  .soul-log { grid-column: 1 / -1; background: #0a0a0f; border-top: 1px solid #1a1a2e; overflow-y: auto; padding: 8px 16px; font-size: 11px; line-height: 1.5; }
+  .soul-log .entry { display: flex; gap: 8px; }
+  .soul-log .ts { color: #333; min-width: 80px; }
+  .soul-log .agent-tag { min-width: 60px; font-weight: 700; }
+  .soul-log .msg { color: #888; }
+  .soul-log .msg.error { color: #ff4444; }
+  .soul-log .msg.correction { color: #ffaa00; }
+  .soul-log .msg.check { color: #4488ff; }
+</style>
+</head>
+<body>
+<div class="grid">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>LIVING CODE</h1>
+    <span class="status" id="conn-status">connecting...</span>
+    <span class="spacer"></span>
+    <div class="metric"><span class="val" id="m-agents">0</span><span class="lbl">agents</span></div>
+    <div class="metric"><span class="val" id="m-iq">0.00</span><span class="lbl">collective IQ</span></div>
+    <div class="metric"><span class="val" id="m-ratio">0.0x</span><span class="lbl">compression</span></div>
+    <div class="metric"><span class="val" id="m-msgs">0</span><span class="lbl">messages</span></div>
+    <div class="metric"><span class="val" id="m-worm">0</span><span class="lbl">WORM</span></div>
+    <div class="metric"><span class="val" id="m-fibra">0.0</span><span class="lbl">fibra angle</span></div>
+    <div class="metric"><span class="val" id="m-frame">0</span><span class="lbl">frame</span></div>
+    <div class="metric"><span class="val" id="m-fps">0</span><span class="lbl">fps</span></div>
+  </div>
+
+  <!-- Latent space canvas -->
+  <div class="canvas-wrap">
+    <canvas id="latent"></canvas>
+  </div>
+
+  <!-- Agent panel -->
+  <div class="side">
+    <h2>Agents</h2>
+    <div id="agent-list"></div>
+    <h2 style="margin-top: 12px">Sandbox</h2>
+    <div id="sandbox-list"><span class="info">No VMs</span></div>
+  </div>
+
+  <!-- Soul log -->
+  <div class="soul-log" id="soul-log"></div>
+
+</div>
+
+<script>
+const canvas = document.getElementById('latent');
+const ctx = canvas.getContext('2d');
+const soulLog = document.getElementById('soul-log');
+const agentList = document.getElementById('agent-list');
+
+let lastFrame = null;
+let frameCount = 0;
+let lastFpsTime = Date.now();
+let fps = 0;
+
+// --- WebSocket ---
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/stream/ws`);
+  const status = document.getElementById('conn-status');
+
+  ws.onopen = () => { status.textContent = 'LIVE'; status.className = 'status live'; };
+  ws.onclose = () => { status.textContent = 'disconnected'; status.className = 'status'; setTimeout(connect, 2000); };
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'connected') return;
+    lastFrame = data;
+    frameCount++;
+  };
+}
+connect();
+
+// --- Render loop ---
+function resize() {
+  const wrap = canvas.parentElement;
+  canvas.width = wrap.clientWidth * devicePixelRatio;
+  canvas.height = wrap.clientHeight * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+}
+resize();
+window.addEventListener('resize', resize);
+
+const COLORS = {
+  idle: '#448844',
+  executing: '#3399dd',
+  thinking: '#7755dd',
+  error: '#dd4444',
+  evolving: '#ddaa33',
+};
+
+function render() {
+  requestAnimationFrame(render);
+  if (!lastFrame) return;
+
+  const f = lastFrame;
+  const w = canvas.width / devicePixelRatio;
+  const h = canvas.height / devicePixelRatio;
+
+  // Background
+  ctx.fillStyle = `rgb(${10 + Math.floor(f.global.collectiveIQ * 8)}, ${10 + Math.floor(f.global.compressionRatio * 3)}, ${15 + Math.floor(f.global.fibraAngle * 0.05)})`;
+  ctx.fillRect(0, 0, w, h);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x < w; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+  for (let y = 0; y < h; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+  // Attention lines
+  for (const agent of f.agents) {
+    const ax = (agent.pos[0] + 1) * 0.5 * w;
+    const ay = (agent.pos[1] + 1) * 0.5 * h;
+    for (const [otherId, weight] of Object.entries(agent.attention)) {
+      if (weight < 0.2) continue;
+      const other = f.agents.find(a => a.id === otherId);
+      if (!other) continue;
+      const bx = (other.pos[0] + 1) * 0.5 * w;
+      const by = (other.pos[1] + 1) * 0.5 * h;
+      ctx.strokeStyle = `rgba(80, 160, 255, ${weight * 0.4})`;
+      ctx.lineWidth = weight * 3;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    }
+  }
+
+  // Agents
+  for (const agent of f.agents) {
+    const cx = (agent.pos[0] + 1) * 0.5 * w;
+    const cy = (agent.pos[1] + 1) * 0.5 * h;
+    const r = 8 + agent.confidence * 16;
+    const color = COLORS[agent.state] || COLORS.idle;
+
+    // Glow
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 3);
+    grad.addColorStop(0, color + '40');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(cx - r * 3, cy - r * 3, r * 6, r * 6);
+
+    // Circle
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+
+    // Inner dot (confidence)
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(cx, cy, r * agent.confidence * 0.4, 0, Math.PI * 2); ctx.fill();
+
+    // Label
+    ctx.fillStyle = '#ddd';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(agent.id, cx, cy - r - 6);
+    ctx.fillStyle = '#777';
+    ctx.font = '9px monospace';
+    ctx.fillText(`v${agent.skillVersion} ${agent.state}`, cx, cy + r + 12);
+
+    // Embedding bars
+    const barW = 2, barH = 20;
+    const startX = cx - (agent.embedding.length * (barW + 1)) / 2;
+    for (let i = 0; i < agent.embedding.length; i++) {
+      const val = (agent.embedding[i] + 1) * 0.5;
+      const bh = val * barH;
+      ctx.fillStyle = `hsl(${val * 200 + 160}, 80%, 50%)`;
+      ctx.fillRect(startX + i * (barW + 1), cy + r + 18 + (barH - bh), barW, bh);
+    }
+  }
+
+  // Fibra spiral (background decoration)
+  ctx.strokeStyle = 'rgba(0, 255, 136, 0.06)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < 200; i++) {
+    const angle = (i * 137.508 * Math.PI) / 180;
+    const dist = Math.sqrt(i) * 12;
+    const sx = w / 2 + Math.cos(angle) * dist;
+    const sy = h / 2 + Math.sin(angle) * dist;
+    if (i === 0) ctx.moveTo(sx, sy);
+    else ctx.lineTo(sx, sy);
+  }
+  ctx.stroke();
+
+  // Update header metrics
+  const now = Date.now();
+  if (now - lastFpsTime > 1000) { fps = frameCount; frameCount = 0; lastFpsTime = now; }
+  document.getElementById('m-agents').textContent = f.global.activeAgents;
+  document.getElementById('m-iq').textContent = f.global.collectiveIQ.toFixed(2);
+  document.getElementById('m-ratio').textContent = f.global.compressionRatio.toFixed(1) + 'x';
+  document.getElementById('m-msgs').textContent = f.global.networkMessages;
+  document.getElementById('m-worm').textContent = f.global.wormEntries;
+  document.getElementById('m-fibra').textContent = f.global.fibraAngle.toFixed(1) + '\u00b0';
+  document.getElementById('m-frame').textContent = f.frame;
+  document.getElementById('m-fps').textContent = fps;
+
+  // Update agent cards
+  updateAgentCards(f.agents);
+  updateSoulLog(f.agents);
+}
+requestAnimationFrame(render);
+
+// --- Agent cards ---
+const seenThoughts = new Set();
+
+function updateAgentCards(agents) {
+  agentList.innerHTML = agents.map(a => {
+    const color = COLORS[a.state] || COLORS.idle;
+    const embBars = a.embedding.map(v => {
+      const val = (v + 1) * 0.5;
+      return `<div class="bar" style="background:hsl(${val*200+160},80%,50%);opacity:${0.5+val*0.5}"></div>`;
+    }).join('');
+    return `<div class="agent-card">
+      <div class="name"><span class="dot" style="background:${color}"></span>${a.id}</div>
+      <div class="info">
+        state: <span class="val">${a.state}</span><br>
+        skill: <span class="val">${a.skill} v${a.skillVersion}</span><br>
+        confidence: <span class="val">${(a.confidence*100).toFixed(0)}%</span><br>
+        thought: <span class="val">${a.thought}</span>
+      </div>
+      <div class="embedding">${embBars}</div>
+    </div>`;
+  }).join('');
+}
+
+function updateSoulLog(agents) {
+  for (const a of agents) {
+    const key = a.id + ':' + a.thought;
+    if (seenThoughts.has(key)) continue;
+    seenThoughts.add(key);
+    if (seenThoughts.size > 500) { /* trim */ const arr = [...seenThoughts]; seenThoughts.clear(); arr.slice(-200).forEach(x => seenThoughts.add(x)); }
+
+    const cls = a.state === 'error' ? 'error' : a.state === 'evolving' ? 'correction' : a.state === 'thinking' ? 'check' : '';
+    const el = document.createElement('div');
+    el.className = 'entry';
+    el.innerHTML = `<span class="ts">${new Date().toLocaleTimeString()}</span><span class="agent-tag" style="color:${COLORS[a.state]||'#888'}">${a.id}</span><span class="msg ${cls}">${a.thought} [${a.state}] conf=${(a.confidence*100).toFixed(0)}%</span>`;
+    soulLog.appendChild(el);
+    soulLog.scrollTop = soulLog.scrollHeight;
+  }
+}
+</script>
+</body>
+</html>
