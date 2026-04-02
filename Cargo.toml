@@ -1,0 +1,13 @@
+[package]
+name = "ai-os-2026"
+version = "0.1.0"
+edition = "2021"
+description = "AI-OS 2026: 5-Layer Architecture for Controlled AI"
+license = "Apache-2.0"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]
