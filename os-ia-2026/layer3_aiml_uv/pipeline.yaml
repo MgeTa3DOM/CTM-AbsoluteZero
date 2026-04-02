@@ -1,0 +1,12 @@
+# AIML Pipeline Example
+pipeline:
+  name: "code-review-pipeline"
+  steps:
+    - agent: code-reviewer
+      input: ${source_code}
+      output: review_results
+
+    - agent: fix-applier
+      input: ${review_results}
+      output: patched_code
+      requires: human_approval  # HILT escalation
